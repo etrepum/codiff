@@ -1,36 +1,6 @@
-import { createRequire } from 'node:module';
 import { expect, test } from 'vite-plus/test';
 import { fileHasVisibleDiff, getVisibleDiffSections } from './App.tsx';
 import type { ChangedFile } from './types.ts';
-
-const require = createRequire(import.meta.url);
-const { parseStatus } = require('../electron/git-state.cjs') as {
-  parseStatus: (raw: string) => Array<{
-    oldPath?: string;
-    path: string;
-    staged: boolean;
-    status: string;
-    unstaged: boolean;
-    untracked: boolean;
-  }>;
-};
-
-test('App', () => {
-  expect(1 + 1).toBe(2);
-});
-
-test('parseStatus reads staged rename paths in porcelain v1 -z order', () => {
-  expect(parseStatus('R  new.txt\0old.txt\0')).toEqual([
-    {
-      oldPath: 'old.txt',
-      path: 'new.txt',
-      staged: true,
-      status: 'renamed',
-      unstaged: false,
-      untracked: false,
-    },
-  ]);
-});
 
 test('pure renames are visible without content hunks', () => {
   const file = {

@@ -2,7 +2,7 @@
 
 ## Native Apps
 
-Codiff uses Electron Forge at the repository root. The Forge setup mirrors Athena Crisis' maker and macOS signing/notarization shape, but uses Codiff-specific identifiers:
+Codiff uses Electron Forge at the repository root:
 
 - App bundle ID: `dev.nkzw-tech.codiff`
 - Product name: `Codiff`
@@ -22,7 +22,7 @@ pnpm make:mac
 electron-forge make --platform=darwin --arch=arm64
 ```
 
-For a signed and notarized macOS build, export the same Apple environment variables used by Athena Crisis before running `pnpm make:mac`:
+For a signed and notarized macOS build, export the Apple environment variables `pnpm make:mac`:
 
 ```sh
 export APPLE_ID='apple-id@example.com'
@@ -36,16 +36,7 @@ The signing certificate must already be present in the local keychain. If `APPLE
 
 ## GitHub Actions
 
-`.github/workflows/build-app.yml` builds Linux and Windows artifacts on Ubuntu with Wine, matching Athena Crisis' Linux/Windows CI approach.
-
-The workflow collects Linux artifacts before the Windows build can replace the
-Forge `out` directory, then uploads:
-
-- `artifacts/native-apps/linux-make`
-- `artifacts/native-apps/codiff-linux-x64.tar.gz`
-- `artifacts/native-apps/windows-make`
-
-macOS builds are intentionally local-only for now because they require the Developer ID certificate in the local keychain.
+`.github/workflows/build-app.yml` builds Linux and Windows artifacts on Ubuntu with Wine. macOS builds are intentionally local-only for now because they require the Developer ID certificate in the local keychain.
 
 ## App-Specific Setup
 

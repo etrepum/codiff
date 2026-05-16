@@ -40,7 +40,7 @@ jobs:
         run: |
           sudo dpkg --add-architecture i386
           sudo apt update
-          sudo apt install -y fakeroot wine-stable p7zip-full rpm
+          sudo apt install -y wine-stable p7zip-full rpm
 
           mkdir -p "${HOME}/.wine/drive_c/windows/system32"
           ln -sf $(which 7z) "${HOME}/.wine/drive_c/windows/system32/7z.exe"
@@ -67,58 +67,15 @@ jobs:
 
       - name: Build Native Apps
         run: |
-          set -euo pipefail
-
-          retry() {
-            attempts=3
-            delay=10
-            count=1
-
-            until "$@"; do
-              exit_code=$?
-
-              if [ "$count" -ge "$attempts" ]; then
-                return "$exit_code"
-              fi
-
-              echo "Command failed with exit code ${exit_code}. Retrying in ${delay}s..."
-              sleep "$delay"
-              count=$((count + 1))
-              delay=$((delay * 2))
-            done
-          }
-
-          rm -rf artifacts/native-apps
-          mkdir -p artifacts/native-apps
-
-          rm -rf out
-          retry pnpm exec electron-forge package --platform=linux --arch=x64
-          linux_app_dir=$(find out -maxdepth 1 -type d -name '*-linux-x64' | head -n 1)
-          test -n "$linux_app_dir"
-          find out -maxdepth 5 -type f | sort
-          tar -czf artifacts/native-apps/codiff-linux-x64.tar.gz -C out "$(basename "$linux_app_dir")"
-
-          if retry pnpm exec electron-forge make --skip-package --platform=linux --arch=x64 && [ -d out/make ]; then
-            find out -maxdepth 5 -type f | sort
-            cp -R out/make artifacts/native-apps/linux-make
-          else
-            echo "No Linux maker artifacts were produced; uploaded raw Linux tarball only."
-          fi
-
-          rm -rf out
-          retry pnpm exec electron-forge package --platform=win32 --arch=x64
-          windows_app_dir=$(find out -maxdepth 1 -type d -name '*-win32-x64' | head -n 1)
-          test -n "$windows_app_dir"
-          retry pnpm exec electron-forge make --skip-package --platform=win32 --arch=x64
-          test -d out/make
-          find out -maxdepth 5 -type f | sort
-          cp -R out/make artifacts/native-apps/windows-make
-
-          find artifacts/native-apps -maxdepth 6 -type f | sort
+          pnpm run forge:make
+          pnpm run forge:package -- --platform=linux --arch x64
+          pnpm run forge:make -- --platform=win32
 
       - name: Upload Artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
           name: native-apps
-          path: ./artifacts/native-apps
+          path: |
+            ./out/make
+            ./out/codiff-linux-x64

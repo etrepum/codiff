@@ -59,9 +59,8 @@ const parseStatus = (raw) => {
     let path = record.slice(3);
     let oldPath;
 
-    if (x === 'R' || x === 'C') {
-      oldPath = path;
-      path = parts[++index];
+    if (x === 'R' || x === 'C' || y === 'R' || y === 'C') {
+      oldPath = parts[++index];
     }
 
     const current = files.get(path) || {

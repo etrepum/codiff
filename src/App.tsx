@@ -300,20 +300,28 @@ const parseSectionDiffWithOptions = (
   return fileDiff;
 };
 
-const fileHasVisibleDiff = (file: ChangedFile, showWhitespace: boolean) =>
-  file.sections.some((section) => {
-    if (section.binary) {
-      return true;
-    }
+const fileHasMetadataDiff = (file: ChangedFile) =>
+  file.status === 'renamed' && file.oldPath != null && file.oldPath !== file.path;
 
-    return parseSectionDiffWithOptions(file, section, showWhitespace).hunks.length > 0;
-  });
+const sectionHasVisibleDiff = (
+  file: ChangedFile,
+  section: DiffSection,
+  fileDiff: FileDiffMetadata,
+) => section.binary || fileHasMetadataDiff(file) || fileDiff.hunks.length > 0;
+
+export const getVisibleDiffSections = (file: ChangedFile, showWhitespace: boolean) =>
+  file.sections
+    .map((section) => ({
+      fileDiff: parseSectionDiffWithOptions(file, section, showWhitespace),
+      section,
+    }))
+    .filter(({ fileDiff, section }) => sectionHasVisibleDiff(file, section, fileDiff));
+
+export const fileHasVisibleDiff = (file: ChangedFile, showWhitespace: boolean) =>
+  getVisibleDiffSections(file, showWhitespace).length > 0;
 
 const getFirstVisibleSection = (file: ChangedFile, showWhitespace: boolean) =>
-  file.sections.find(
-    (section) =>
-      section.binary || parseSectionDiffWithOptions(file, section, showWhitespace).hunks.length > 0,
-  );
+  getVisibleDiffSections(file, showWhitespace)[0]?.section;
 
 function Sidebar({
   files,
@@ -582,12 +590,7 @@ function ReviewCodeView({
     for (const file of files) {
       const isViewed = viewed[file.path] === file.fingerprint;
       const isCollapsed = collapsed.has(file.path);
-      const visibleSections = file.sections
-        .map((section) => ({
-          fileDiff: parseSectionDiffWithOptions(file, section, showWhitespace),
-          section,
-        }))
-        .filter(({ fileDiff, section }) => section.binary || fileDiff.hunks.length > 0);
+      const visibleSections = getVisibleDiffSections(file, showWhitespace);
       const sections = isCollapsed ? visibleSections.slice(0, 1) : visibleSections;
 
       for (const [index, { fileDiff, section }] of sections.entries()) {

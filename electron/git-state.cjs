@@ -353,6 +353,47 @@ const readWorkingTreeState = async (launchPath) => {
   };
 };
 
+const readUntrackedFileSignatures = async (repoRoot) => {
+  const raw = await git(repoRoot, ['ls-files', '--others', '--exclude-standard', '-z']);
+  const paths = raw.split('\0').filter(Boolean).sort();
+  const signatures = [];
+
+  for (const path of paths) {
+    try {
+      const stat = await fs.stat(join(repoRoot, path));
+      signatures.push(`${path}\0${stat.size}\0${stat.mtimeMs}`);
+    } catch {
+      signatures.push(`${path}\0missing`);
+    }
+  }
+
+  return signatures.join('\0');
+};
+
+const gitOrEmpty = async (repoRoot, args) => {
+  try {
+    return await git(repoRoot, args);
+  } catch {
+    return '';
+  }
+};
+
+const readRepositoryChangeSignature = async (launchPath) => {
+  const repoRoot = (await git(launchPath, ['rev-parse', '--show-toplevel'])).trim();
+  const [head, status, stagedDiff, unstagedDiff, untracked] = await Promise.all([
+    gitOrEmpty(repoRoot, ['rev-parse', '--verify', 'HEAD']),
+    git(repoRoot, ['status', '--branch', '--porcelain=v1', '-z', '-uall']),
+    gitOrEmpty(repoRoot, ['diff', '--cached', '--binary', '--no-ext-diff']),
+    gitOrEmpty(repoRoot, ['diff', '--binary', '--no-ext-diff']),
+    readUntrackedFileSignatures(repoRoot),
+  ]);
+
+  return {
+    root: repoRoot,
+    signature: getFingerprint([head, status, stagedDiff, unstagedDiff, untracked].join('\0')),
+  };
+};
+
 const readCommitState = async (launchPath, ref) => {
   const repoRoot = (await git(launchPath, ['rev-parse', '--show-toplevel'])).trim();
   const commit = (await git(repoRoot, ['rev-parse', '--verify', `${ref}^{commit}`])).trim();
@@ -451,6 +492,7 @@ const listRepositoryHistory = async (launchPath, limit = 200) => {
 module.exports = {
   listRepositoryHistory,
   parseStatus,
+  readRepositoryChangeSignature,
   readCommitState,
   readRepositoryState,
   readWorkingTreeState,

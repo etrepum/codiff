@@ -22,9 +22,14 @@ const {
   shell,
 } = require('electron');
 const squirrelStartup = require('electron-squirrel-startup');
-const { listRepositoryHistory, readRepositoryState } = require('./git-state.cjs');
+const {
+  listRepositoryHistory,
+  readRepositoryChangeSignature,
+  readRepositoryState,
+} = require('./git-state.cjs');
 
 const root = dirname(__dirname);
+const repositoryWatchers = new Map();
 const windowRepositories = new Map();
 let preferences = {
   showWhitespace: false,
@@ -61,6 +66,67 @@ const sendPreferencesChanged = () => {
       window.webContents.send('codiff:preferencesChanged', preferences);
     }
   }
+};
+
+const readRepositoryWatcherSnapshot = async (repositoryPath) => {
+  try {
+    return await readRepositoryChangeSignature(repositoryPath);
+  } catch (error) {
+    return {
+      root: repositoryPath,
+      signature: `error:${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+};
+
+const resetRepositoryWatcher = async (webContentsId, repositoryPath) => {
+  const watcher = repositoryWatchers.get(webContentsId);
+  if (!watcher) {
+    return;
+  }
+
+  const snapshot = await readRepositoryWatcherSnapshot(repositoryPath);
+  watcher.changed = false;
+  watcher.signature = snapshot.signature;
+};
+
+const startRepositoryWatcher = (browserWindow, repositoryPath) => {
+  const webContentsId = browserWindow.webContents.id;
+  const watcher = {
+    changed: false,
+    checking: false,
+    interval: undefined,
+    signature: undefined,
+  };
+  repositoryWatchers.set(webContentsId, watcher);
+
+  const checkForChanges = async (reset = false) => {
+    if (watcher.checking || browserWindow.isDestroyed()) {
+      return;
+    }
+
+    watcher.checking = true;
+    try {
+      const snapshot = await readRepositoryWatcherSnapshot(repositoryPath);
+      if (reset || watcher.signature == null) {
+        watcher.changed = false;
+        watcher.signature = snapshot.signature;
+        return;
+      }
+
+      if (!watcher.changed && watcher.signature !== snapshot.signature) {
+        watcher.changed = true;
+        browserWindow.webContents.send('codiff:repositoryChanged', {
+          root: snapshot.root,
+        });
+      }
+    } finally {
+      watcher.checking = false;
+    }
+  };
+
+  void checkForChanges(true);
+  watcher.interval = setInterval(() => void checkForChanges(), 2500);
 };
 
 const openRepositoryFolder = async (browserWindow) => {
@@ -161,6 +227,20 @@ const buildApplicationMenu = () =>
       ],
     },
     {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'pasteAndMatchStyle' },
+        { role: 'delete' },
+        { role: 'selectAll' },
+      ],
+    },
+    {
       label: 'View',
       submenu: [
         {
@@ -211,8 +291,16 @@ const createWindow = (repositoryPath) => {
 
   const webContentsId = window.webContents.id;
   windowRepositories.set(webContentsId, repositoryPath);
+  startRepositoryWatcher(window, repositoryPath);
   window.once('ready-to-show', () => window.show());
-  window.on('closed', () => windowRepositories.delete(webContentsId));
+  window.on('closed', () => {
+    const watcher = repositoryWatchers.get(webContentsId);
+    if (watcher?.interval) {
+      clearInterval(watcher.interval);
+    }
+    repositoryWatchers.delete(webContentsId);
+    windowRepositories.delete(webContentsId);
+  });
 
   const rendererURL = process.env.ELECTRON_RENDERER_URL;
   if (rendererURL) {
@@ -258,7 +346,9 @@ if (squirrelStartup || !lock) {
 
 ipcMain.handle('codiff:getRepositoryState', async (event, source) => {
   const repositoryPath = windowRepositories.get(event.sender.id) || getLaunchPath();
-  return readRepositoryState(repositoryPath, source);
+  const state = await readRepositoryState(repositoryPath, source);
+  await resetRepositoryWatcher(event.sender.id, repositoryPath);
+  return state;
 });
 
 ipcMain.handle('codiff:getRepositoryHistory', async (event, limit) => {

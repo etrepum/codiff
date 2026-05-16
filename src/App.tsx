@@ -171,7 +171,24 @@ const fuzzyMatches = (path: string, query: string) => {
   return true;
 };
 
+type NativeInputEventTarget = EventTarget & {
+  closest?: (selector: string) => Element | null;
+  isContentEditable?: boolean;
+};
+
+export const isNativeInputTarget = (target: EventTarget | null) => {
+  const candidate = target as NativeInputEventTarget | null;
+  return (
+    candidate?.closest?.('input, select, textarea') != null || candidate?.isContentEditable === true
+  );
+};
+
 const getViewedKey = (root: string) => `codiff:viewed:${root}`;
+
+const getReloadShortcutLabel = () => {
+  const platform = navigator.platform.toLowerCase();
+  return platform.includes('mac') ? '⌘R' : 'Ctrl+R';
+};
 
 const readViewed = (root: string): Record<string, string> => {
   try {
@@ -445,7 +462,11 @@ function Sidebar({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'p') {
+      if (
+        !isNativeInputTarget(event.target) &&
+        (event.metaKey || event.ctrlKey) &&
+        event.key.toLowerCase() === 'p'
+      ) {
         event.preventDefault();
         searchInputRef.current?.focus();
         searchInputRef.current?.select();
@@ -484,12 +505,6 @@ function Sidebar({
           aria-label="Filter changed files"
           className="sidebar-search"
           onChange={(event) => onSearchQueryChange(event.currentTarget.value)}
-          onKeyDown={(event) => {
-            if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'a') {
-              event.currentTarget.select();
-              event.preventDefault();
-            }
-          }}
           placeholder="Filter files"
           ref={searchInputRef}
           spellCheck={false}
@@ -754,10 +769,22 @@ function ReviewCodeView({
   );
 }
 
+function RepositoryChangeBanner({ visible }: { visible: boolean }) {
+  return (
+    <div aria-live="polite" className={`repository-change-banner${visible ? ' visible' : ''}`}>
+      <span>Local changes detected,</span>
+      <button onClick={() => window.location.reload()} type="button">
+        {getReloadShortcutLabel()} to reload.
+      </button>
+    </div>
+  );
+}
+
 export default function App() {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [error, setError] = useState<string | null>(null);
   const [itemVersionByPath, setItemVersionByPath] = useState<Record<string, number>>({});
+  const [localChangesDetected, setLocalChangesDetected] = useState(false);
   const [preferences, setPreferences] = useState<CodiffPreferences>(defaultPreferences);
   const [scrollTarget, setScrollTarget] = useState<{ path: string; request: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -806,6 +833,14 @@ export default function App() {
       canceled = true;
     };
   }, []);
+
+  useEffect(
+    () =>
+      window.codiff.onRepositoryChanged(() => {
+        setLocalChangesDetected(true);
+      }),
+    [],
+  );
 
   useEffect(() => {
     let canceled = false;
@@ -997,6 +1032,7 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      <RepositoryChangeBanner visible={localChangesDetected} />
       <aside className="sidebar squircle">
         <div className="sidebar-header">
           <div className="sidebar-path-row">

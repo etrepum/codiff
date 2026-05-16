@@ -18,13 +18,16 @@ type StatusEntry = {
 
 type GitStateModule = {
   parseStatus: (raw: string) => Array<StatusEntry>;
+  readRepositoryChangeSignature: (
+    launchPath: string,
+  ) => Promise<{ root: string; signature: string }>;
   readRepositoryState: (launchPath: string) => Promise<RepositoryState>;
   readWorkingTreeState: (launchPath: string) => Promise<RepositoryState>;
 };
 
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
-const { parseStatus, readRepositoryState, readWorkingTreeState } =
+const { parseStatus, readRepositoryChangeSignature, readRepositoryState, readWorkingTreeState } =
   require('../electron/git-state.cjs') as GitStateModule;
 
 const git = async (repo: string, args: ReadonlyArray<string>) => {
@@ -200,6 +203,33 @@ test('readWorkingTreeState marks modified binary files as binary sections', asyn
     expect(state.files[0].sections[0].binary).toBe(true);
     expect(state.files[0].sections[0].oldFile).toBeUndefined();
     expect(state.files[0].sections[0].newFile).toBeUndefined();
+  });
+});
+
+test('readRepositoryChangeSignature changes for unstaged content edits', async () => {
+  await withRepo(async (repo) => {
+    await writeRepoFile(repo, 'file.txt', 'one\n');
+    await commitAll(repo, 'initial commit');
+    await writeRepoFile(repo, 'file.txt', 'two changed\n');
+
+    const before = await readRepositoryChangeSignature(repo);
+    await writeRepoFile(repo, 'file.txt', 'three\n');
+    const after = await readRepositoryChangeSignature(repo);
+
+    expect(before.root).toBe(repo);
+    expect(after.signature).not.toBe(before.signature);
+  });
+});
+
+test('readRepositoryChangeSignature changes for untracked content edits', async () => {
+  await withRepo(async (repo) => {
+    await writeRepoFile(repo, 'file.txt', 'one\n');
+
+    const before = await readRepositoryChangeSignature(repo);
+    await writeRepoFile(repo, 'file.txt', 'two changed\n');
+    const after = await readRepositoryChangeSignature(repo);
+
+    expect(after.signature).not.toBe(before.signature);
   });
 });
 

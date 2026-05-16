@@ -89,6 +89,53 @@
   overflow: hidden;
 }
 
+.repository-change-banner {
+  -webkit-app-region: no-drag;
+  align-items: center;
+  background: color-mix(in srgb, var(--viewed) 10%, var(--code-bg));
+  border: 1px solid color-mix(in srgb, var(--viewed) 18%, transparent);
+  border-radius: 17px;
+  box-shadow: 0 16px 46px -30px color-mix(in srgb, var(--viewed) 52%, rgb(0 0 0));
+  color: color-mix(in srgb, var(--viewed) 36%, var(--text));
+  corner-shape: squircle;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 5px;
+  left: 50%;
+  line-height: 1.25;
+  padding: 8px 13px;
+  pointer-events: none;
+  position: fixed;
+  top: 18px;
+  transform: translate(-50%, -66px);
+  transition:
+    opacity 180ms ease,
+    transform 320ms cubic-bezier(0.2, 0.82, 0.22, 1);
+  z-index: 10;
+}
+
+.repository-change-banner.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
+}
+
+.repository-change-banner:not(.visible) {
+  opacity: 0;
+}
+
+.repository-change-banner button {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .sidebar {
   -webkit-backdrop-filter: blur(28px) saturate(1.3);
   backdrop-filter: blur(28px) saturate(1.3);

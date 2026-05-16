@@ -9,5 +9,10 @@ contextBridge.exposeInMainWorld('codiff', {
     ipcRenderer.on('codiff:preferencesChanged', listener);
     return () => ipcRenderer.removeListener('codiff:preferencesChanged', listener);
   },
+  onRepositoryChanged: (callback) => {
+    const listener = (_event, change) => callback(change);
+    ipcRenderer.on('codiff:repositoryChanged', listener);
+    return () => ipcRenderer.removeListener('codiff:repositoryChanged', listener);
+  },
   showInFolder: (path) => ipcRenderer.invoke('codiff:showInFolder', path),
 });

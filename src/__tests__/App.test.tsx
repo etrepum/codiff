@@ -6,8 +6,27 @@ import {
   buildReviewCommentsMarkdown,
   shouldDiscardReviewCommentOnEscape,
 } from '../lib/review-comments.ts';
+import {
+  SIDEBAR_DEFAULT_WIDTH,
+  SIDEBAR_MAX_WIDTH,
+  SIDEBAR_MIN_WIDTH,
+  clampSidebarWidth,
+  readSidebarWidth,
+  writeSidebarWidth,
+} from '../lib/sidebar-width.ts';
 import { getRepositoryLoadError } from '../lib/source.ts';
 import type { ChangedFile } from '../types.ts';
+
+const createStorage = (initialValue?: string) => {
+  let value = initialValue ?? null;
+
+  return {
+    getItem: () => value,
+    setItem: (_key: string, nextValue: string) => {
+      value = nextValue;
+    },
+  };
+};
 
 test('pure renames are visible without content hunks', () => {
   const file = {
@@ -194,6 +213,26 @@ test('diff search shortcut does not claim fullscreen shortcut', () => {
   expect(isDiffSearchShortcut({ ...baseEvent, ctrlKey: false, metaKey: true }, 'Win32')).toBe(
     false,
   );
+});
+
+test('sidebar width clamps persisted values', () => {
+  expect(clampSidebarWidth(SIDEBAR_MIN_WIDTH - 20)).toBe(SIDEBAR_MIN_WIDTH);
+  expect(clampSidebarWidth(SIDEBAR_MAX_WIDTH + 20)).toBe(SIDEBAR_MAX_WIDTH);
+  expect(clampSidebarWidth(320.6)).toBe(321);
+});
+
+test('sidebar width falls back for missing or invalid storage values', () => {
+  expect(readSidebarWidth(createStorage())).toBe(SIDEBAR_DEFAULT_WIDTH);
+  expect(readSidebarWidth(createStorage('wide'))).toBe(SIDEBAR_DEFAULT_WIDTH);
+});
+
+test('sidebar width reads and writes clamped storage values', () => {
+  const storage = createStorage('180');
+
+  expect(readSidebarWidth(storage)).toBe(SIDEBAR_MIN_WIDTH);
+
+  writeSidebarWidth(900, storage);
+  expect(readSidebarWidth(storage)).toBe(SIDEBAR_MAX_WIDTH);
 });
 
 test('repository load errors hide raw git output for non-repositories', () => {

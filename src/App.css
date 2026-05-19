@@ -677,14 +677,16 @@
   box-shadow:
     0 0 0 1px var(--file-border),
     6px 18px 80px -54px rgb(0 0 0 / 0.78);
-  contain: layout paint style;
+  contain: layout style;
   corner-shape: squircle;
   display: block;
-  overflow: hidden;
+  overflow: clip;
 }
 
 .codiff-file-header {
+  -webkit-backdrop-filter: blur(4px) saturate(1.18);
   align-items: center;
+  backdrop-filter: blur(4px) saturate(1.18);
   background: var(--file-bg);
   box-shadow: inset 0 -1px 0 var(--file-border);
   color: var(--text);
@@ -693,6 +695,7 @@
   height: 54px;
   grid-template-columns: minmax(0, 1fr) auto auto auto;
   padding: 9px 10px;
+  transition: border-radius 120ms ease;
 }
 
 .codiff-file-header.with-note {
@@ -715,6 +718,10 @@
 
 .codiff-file-header.collapsed.selected {
   box-shadow: inset 0 0 0 1px rgb(61 135 245 / 0.52);
+}
+
+.codiff-file-header.stuck {
+  border-radius: 0;
 }
 
 .codiff-file-header.viewed .codiff-file-path {

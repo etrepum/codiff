@@ -48,6 +48,19 @@ type CodeViewInstance = NonNullable<
   ReturnType<CodeViewHandle<ReviewAnnotationMetadata>['getInstance']>
 >;
 
+function updateStickyHeaderState(viewer: CodeViewInstance) {
+  for (const item of viewer.getRenderedItems()) {
+    const header = item.element.querySelector<HTMLElement>('.codiff-file-header');
+    if (!header) {
+      continue;
+    }
+
+    const headerTop = header.getBoundingClientRect().top;
+    const itemTop = item.element.getBoundingClientRect().top;
+    header.classList.toggle('stuck', headerTop > itemTop + 0.5);
+  }
+}
+
 type DiffSearchMatch = {
   filePath: string;
   itemId: string;
@@ -365,6 +378,11 @@ const codeViewUnsafeCSS = `
 
   [data-diff-type="split"][data-overflow="scroll"] {
     grid-template-columns: minmax(0, 42fr) minmax(0, 58fr);
+  }
+
+  [data-diffs-header="custom"][data-sticky] {
+    background-color: transparent;
+    border-radius: 28px 28px 0 0;
   }
 
   /* Align scrollbar with number column */
@@ -1967,6 +1985,7 @@ function ReviewCodeView({
   const codeViewRef = useRef<CodeViewHandle<ReviewAnnotationMetadata>>(null);
   const handledScrollRequestRef = useRef<number | null>(null);
   const highlightFrameRef = useRef<number | null>(null);
+  const stickyHeaderFrameRef = useRef<number | null>(null);
   const commentsBySection = useMemo(() => {
     const map = new Map<string, Array<ReviewComment>>();
     for (const comment of comments) {
@@ -2196,10 +2215,29 @@ function ReviewCodeView({
     });
   }, [activeSearchMatch, searchQuery]);
 
+  const scheduleStickyHeaderStateUpdate = useCallback((viewer?: CodeViewInstance) => {
+    const nextViewer = viewer ?? codeViewRef.current?.getInstance();
+    if (!nextViewer) {
+      return;
+    }
+
+    if (stickyHeaderFrameRef.current != null) {
+      window.cancelAnimationFrame(stickyHeaderFrameRef.current);
+    }
+
+    stickyHeaderFrameRef.current = window.requestAnimationFrame(() => {
+      stickyHeaderFrameRef.current = null;
+      updateStickyHeaderState(nextViewer);
+    });
+  }, []);
+
   useEffect(
     () => () => {
       if (highlightFrameRef.current != null) {
         window.cancelAnimationFrame(highlightFrameRef.current);
+      }
+      if (stickyHeaderFrameRef.current != null) {
+        window.cancelAnimationFrame(stickyHeaderFrameRef.current);
       }
     },
     [],
@@ -2207,7 +2245,8 @@ function ReviewCodeView({
 
   useEffect(() => {
     scheduleSearchHighlights();
-  }, [items, scheduleSearchHighlights]);
+    scheduleStickyHeaderStateUpdate();
+  }, [items, scheduleSearchHighlights, scheduleStickyHeaderStateUpdate]);
 
   useEffect(() => {
     const handle = codeViewRef.current;
@@ -2289,8 +2328,9 @@ function ReviewCodeView({
     (_scrollTop: number, viewer: CodeViewInstance) => {
       onSelectPathFromScroll(viewer);
       scheduleSearchHighlights();
+      scheduleStickyHeaderStateUpdate(viewer);
     },
-    [onSelectPathFromScroll, scheduleSearchHighlights],
+    [onSelectPathFromScroll, scheduleSearchHighlights, scheduleStickyHeaderStateUpdate],
   );
 
   return (
